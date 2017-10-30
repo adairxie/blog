@@ -37,17 +37,26 @@ func GetAllArticles() ([]*Article, error) {
     if err != nil {
         log.Fatalf("%s", err)
     }
+    //log.Printf("Articles'ids : %s", ids)
 
-    var articles []*Article
+    var articleMap []*redis.StringStringMapCmd
+    pipe := client.Pipeline()
 
     for _, id := range ids {
-        articleMap, err := client.HGetAll(fmt.Sprintf("article:%s", id)).Result()
-        if err != nil {
-            log.Fatalf("Cann't get %s's data, err: %s", id, err)
-        }
+        articlePtr := pipe.HGetAll(fmt.Sprintf("article:%s", id))
+        //log.Printf("pipe.HGetAll: %s", articleMap)
+        articleMap = append(articleMap, articlePtr)
+    }
 
+    _, err = pipe.Exec()
+    if err != nil {
+        log.Printf("Redis pipeline exec cmd failed: %s", err)
+    }
+
+    var articles []*Article
+    for _, articlePtr := range articleMap {
         article := &Article{}
-        mapstructure.Decode(articleMap, article)
+        mapstructure.Decode(articlePtr.Val(), article)
         articles = append(articles, article)
     }
     return articles, err
