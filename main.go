@@ -1,14 +1,11 @@
 package main
 
 import (
-    "github.com/adairxie/blog/controllers"
+    _ "github.com/adairxie/blog/routers"
     "github.com/astaxie/beego"
 )
 
 func main() {
-
-    //register router
-    beego.Router("/", &controllers.HomeController{})
 
     //start beego
     beego.Run()

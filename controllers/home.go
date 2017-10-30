@@ -6,11 +6,11 @@ import (
     "github.com/astaxie/beego"
 )
 
-type HomeController struct {
+type MainController struct {
     beego.Controller
 }
 
-func (this *HomeController) Get() {
+func (this *MainController) Get() {
     this.TplName = "index.html"
 
     /*article := &models.Article{
@@ -28,6 +28,6 @@ func (this *HomeController) Get() {
     if err != nil {
         log.Fatalf("Get all articles err: %s", err)
     }
-    
+
     this.Data["Articles"] = articles
 }
