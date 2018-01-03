@@ -3,34 +3,68 @@ package models
 import (
     "fmt"
     "log"
-    "time"
     "strconv"
     "github.com/fatih/structs"
     "github.com/go-redis/redis"
 )
 
 type Article struct {
-    Id              int
+    Id              int64
     Title           string
     SubTitle        string
     Category        string
     Content         string
-    Created         time.Time
-    Updated         time.Time
+    Created         string
+    Updated         string
     Views           int64
     Author          string
 }
 
 func MapToStruct(articleMap map[string]string) *Article {
 
-    id, _ := strconv.Atoi(articleMap["Id"])
+    article := &Article{}
+    id := articleMap["Id"]
     title := articleMap["Title"]
     subTitle := articleMap["SubTitle"]
-    return &Article{
-        Id:         id,
-        Title:      title,
-        SubTitle:   subTitle,
+    content := articleMap["Content"]
+    created := articleMap["Created"]
+    updated := articleMap["Updated"]
+    author := articleMap["Author"]
+    views := articleMap["Views"]
+
+    if id != "" {
+       article.Id, _ = strconv.ParseInt(id, 10, 64)
     }
+
+    if title != "" {
+        article.Title = title
+    }
+
+    if subTitle != "" {
+        article.SubTitle = subTitle
+    }
+
+    if content != "" {
+        article.Content = content
+    }
+
+    if created != "" {
+        article.Created = created
+    }
+
+    if updated != "" {
+        article.Updated = updated
+    }
+
+    if author != "" {
+        article.Author = author
+    }
+
+    if views != "" {
+        article.Views, _= strconv.ParseInt(views, 10, 64)
+    }
+
+    return article
 }
 
 func NewClient() *redis.Client{
@@ -45,8 +79,17 @@ func NewClient() *redis.Client{
 
 func GetArticleById(id int64) *Article {
     client := NewClient()
-    articleMap, _ := client.HGetAll(fmt.Sprintf("article:%d", id)).Result()
-    return MapToStruct(articleMap)
+    key := fmt.Sprintf("article:%d", id)
+
+    pipe := client.Pipeline()
+    pipe.HIncrBy(key, "Views", 1)
+    articleMap := pipe.HGetAll(key)
+    _, err := pipe.Exec()
+    if err != nil {
+        log.Fatalf("Get Article failed, article'id: %d", id)
+    }
+
+    return MapToStruct(articleMap.Val())
 }
 
 func GetAllArticles() ([]*Article, error) {
@@ -61,7 +104,6 @@ func GetAllArticles() ([]*Article, error) {
     pipe := client.Pipeline()
 
     for _, id := range ids {
-        log.Printf("id :%s", id)
         articlePtr := pipe.HGetAll(fmt.Sprintf("article:%s", id))
         //log.Printf("pipe.HGetAll: %s", articleMap)
         articleMap = append(articleMap, articlePtr)
@@ -96,7 +138,7 @@ func AddArticle(post *Article) error {
     if err != nil {
         panic(err)
     }
-    post.Id = int(id)
+    post.Id = int64(id)
     err = client.LPush("article:ids", id).Err()
     if err != nil  {
         return err
@@ -107,4 +149,29 @@ func AddArticle(post *Article) error {
     return err
 }
 
+func ModifyArticle(fields map[string]interface{}) error {
+    client := NewClient()
+    key := fmt.Sprintf("article:%d", fields["Id"])
+    err := client.HMSet(key, fields).Err()
+    return err
+}
 
+func DeleteArticle(id int64) error {
+    client := NewClient()
+    pipe := client.Pipeline()
+    // article:count sub 1
+    pipe.Decr("article:count")
+    // delete article:id 
+    key := fmt.Sprintf("article:%d", id)
+    pipe.Del(key)
+
+    // delete id from article:ids
+    res := pipe.LRem("article:ids", 1, id)
+    _, err := pipe.Exec()
+    if res.Val() != 1 {
+        log.Printf("delete article failed, id: %d", id)
+    }
+
+    return err
+
+}
